@@ -43,7 +43,7 @@ class Stability():
         # Initialize the publisher
         self.pub = rospy.Publisher(FILTERED_POINTCLOUD_TOPIC, PointCloud2, queue_size=10)
 
-        self.model_name = args.model_name
+        self.model_name = args.model
         self.threshold_ground = args.threshold_ground
         self.threshold_dynamic = args.threshold_dynamic
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
