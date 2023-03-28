@@ -21,8 +21,8 @@ from loader import Loader
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.benchmark = False
 
-THRESHOLD_0 = 0.05
-THRESHOLD_1 = 0.85
+THRESHOLD_GROUND = 0.04
+THRESHOLD_DYNAMIC = 0.85
 
 RAW_POINTCLOUD_TOPIC = '/os_cloud_node/points'
 FILTERED_POINTCLOUD_TOPIC = '/cloud_filtered'
@@ -30,18 +30,22 @@ FILTERED_POINTCLOUD_TOPIC = '/cloud_filtered'
 def parse_args():
     parser = argparse.ArgumentParser('Model')
     parser.add_argument('--model', type=str, default='ktima', help='Trained model')
+    parser.add_argument('--threshold_ground', type=float, default=THRESHOLD_GROUND, help='Bottom threshold for gound plane')
+    parser.add_argument('--threshold_dynamic', type=float, default=THRESHOLD_DYNAMIC, help='Upper threshold for dynamics')
     return parser.parse_args()
 
 
 class Stability():
-    def __init__(self, model_name):
+    def __init__(self, args):
         rospy.init_node('pointcloud_stability_inference')
         rospy.Subscriber(RAW_POINTCLOUD_TOPIC, PointCloud2, self.callback)
 
         # Initialize the publisher
         self.pub = rospy.Publisher(FILTERED_POINTCLOUD_TOPIC, PointCloud2, queue_size=10)
 
-        self.model_name = model_name
+        self.model_name = args.model_name
+        self.threshold_ground = args.threshold_ground
+        self.threshold_dynamic = args.threshold_dynamic
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.model = self.load_model(self.device)
 
@@ -133,7 +137,7 @@ class Stability():
 
         data = np.column_stack((points, labels))
 
-        data = data[(data[:,3] < THRESHOLD_1) & (data[:,3] >= THRESHOLD_0)]
+        data = data[(data[:,3] < args.threshold_dynamic) & (data[:,3] >= args.threshold_ground)]
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -144,10 +148,5 @@ class Stability():
 
 if __name__ == '__main__':
     args = parse_args()
-    stability_node = Stability(args.model)
+    stability_node = Stability(args)
     
-
-
-
-
-
