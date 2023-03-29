@@ -43,6 +43,8 @@ class Stability():
         # Initialize the publisher
         self.pub = rospy.Publisher(FILTERED_POINTCLOUD_TOPIC, PointCloud2, queue_size=10)
 
+        rospy.loginfo(args)
+
         self.model_name = args.model
         self.threshold_ground = args.threshold_ground
         self.threshold_dynamic = args.threshold_dynamic
