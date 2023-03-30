@@ -57,7 +57,10 @@ class Stability():
     def callback(self, pointcloud_msg):
         pc = ros_numpy.numpify(pointcloud_msg)
         height = pc.shape[0]
-        width = pc.shape[1]
+        try:
+            width = pc.shape[1]
+        except:
+            width = 1
         data = np.zeros((height * width, 4), dtype=np.float32)
         data[:, 0] = np.resize(pc['x'], height * width)
         data[:, 1] = np.resize(pc['y'], height * width)
