@@ -1,0 +1,8 @@
+<launch>
+    <node pkg="lts_filter" type="stability_filter.py" name="pointcloud_stability_inference" output="screen">
+        <param name="raw_cloud" type="string" value="/os_cloud_node/points"/>
+        <param name="filtered_cloud" type="string" value="/cloud_filtered_ibrahim"/>
+        <param name="epsilon_0" type="double" value="0.04"/>
+        <param name="epsilon_1" type="double" value="0.85"/>
+    </node>
+</launch>

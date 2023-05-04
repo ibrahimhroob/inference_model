@@ -1,11 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
 import time
 import torch
 import struct
-import argparse
 import importlib
 import numpy as np
 
@@ -21,36 +20,29 @@ from loader import Loader
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.benchmark = False
 
-THRESHOLD_GROUND = 0.04
-THRESHOLD_DYNAMIC = 0.85
-
-RAW_POINTCLOUD_TOPIC = '/os_cloud_node/points'
-FILTERED_POINTCLOUD_TOPIC = '/cloud_filtered'
-
-def parse_args():
-    parser = argparse.ArgumentParser('Model')
-    parser.add_argument('--model', type=str, default='ktima', help='Trained model')
-    parser.add_argument('--threshold_ground', type=float, default=THRESHOLD_GROUND, help='Bottom threshold for gound plane')
-    parser.add_argument('--threshold_dynamic', type=float, default=THRESHOLD_DYNAMIC, help='Upper threshold for dynamics')
-    return parser.parse_args()
-
-
 class Stability():
-    def __init__(self, args):
+    def __init__(self):
         rospy.init_node('pointcloud_stability_inference')
-        rospy.Subscriber(RAW_POINTCLOUD_TOPIC, PointCloud2, self.callback)
+
+        raw_cloud_topic = rospy.get_param('~raw_cloud')
+        filtered_cloud_topic = rospy.get_param('~filtered_cloud')
+        epsilon_0 = rospy.get_param('~epsilon_0')
+        epsilon_1 = rospy.get_param('~epsilon_1')
+
+        rospy.Subscriber(raw_cloud_topic, PointCloud2, self.callback)
 
         # Initialize the publisher
-        self.pub = rospy.Publisher(FILTERED_POINTCLOUD_TOPIC, PointCloud2, queue_size=10)
+        self.pub = rospy.Publisher(filtered_cloud_topic, PointCloud2, queue_size=10)
 
-        rospy.loginfo(args)
+        rospy.loginfo('raw_cloud: %s', raw_cloud_topic)
+        rospy.loginfo('filtered_cloud: %s', filtered_cloud_topic)
+        rospy.loginfo('Bottom threshold: %f', epsilon_0)
+        rospy.loginfo('Upper threshold: %f', epsilon_1)
 
-        self.model_name = args.model
-        self.threshold_ground = args.threshold_ground
-        self.threshold_dynamic = args.threshold_dynamic
+        self.threshold_ground = epsilon_0
+        self.threshold_dynamic = epsilon_1
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.model = self.load_model(self.device)
-
 
         rospy.spin()
 
@@ -103,8 +95,10 @@ class Stability():
 
 
     def load_model(self, device):
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        model_path = os.path.join(dir_path, self.model_name)
+        current_pth = os.path.dirname(os.path.realpath(__file__))
+        parent_pth = os.path.dirname(current_pth)
+        rospy.loginfo('rosnode pth: %s', parent_pth)
+        model_path = os.path.join(parent_pth, 'model')
         sys.path.append(model_path)
 
         '''HYPER PARAMETER'''
@@ -142,7 +136,7 @@ class Stability():
 
         data = np.column_stack((points, labels))
 
-        data = data[(data[:,3] < args.threshold_dynamic) & (data[:,3] >= args.threshold_ground)]
+        data = data[(data[:,3] < self.threshold_dynamic) & (data[:,3] >= self.threshold_ground)]
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -152,6 +146,5 @@ class Stability():
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    stability_node = Stability(args)
+    stability_node = Stability()
     
