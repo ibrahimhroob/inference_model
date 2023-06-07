@@ -118,7 +118,6 @@ class Stability():
         return model
 
     def infer(self, pointcloud):
-        
         start_time = time.time()
         FRAME_DATASET = Loader(pointcloud)
         batch_size = FRAME_DATASET.num_windows
@@ -134,7 +133,7 @@ class Stability():
             points = points.permute(0,2,1).cpu().data.numpy().reshape((-1, 3))
             labels = labels.permute(0,2,1).cpu().data.numpy().reshape((-1, ))
 
-        data = np.column_stack((points, labels))
+            data = np.column_stack((points, labels))
 
         data = data[(data[:,3] < self.threshold_dynamic) & (data[:,3] >= self.threshold_ground)]
 

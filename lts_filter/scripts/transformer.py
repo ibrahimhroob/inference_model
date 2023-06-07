@@ -81,13 +81,13 @@ class SPCTReg(nn.Module):
         self.sa4 = OA(128)
 
         self.linear1 = nn.Sequential(
-            nn.Conv1d(512, 2048, kernel_size=1, bias=False),
-            nn.BatchNorm1d(2048),
+            nn.Conv1d(512, 1024, kernel_size=1, bias=False),
+            nn.BatchNorm1d(1024),
             nn.LeakyReLU(negative_slope=0.2, inplace=True)
         )
 
         self.linear2 = nn.Sequential(
-            nn.Conv1d(2048 * 3, 512, 1),
+            nn.Conv1d(1024 * 3, 512, 1),
             nn.BatchNorm1d(512),
             nn.SiLU(inplace=True),
             nn.Dropout(0.2)
