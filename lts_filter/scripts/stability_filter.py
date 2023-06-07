@@ -123,16 +123,23 @@ class Stability():
         FRAME_DATASET = Loader(pointcloud)
         batch_size = FRAME_DATASET.num_windows
 
-        frame_loader = torch.utils.data.DataLoader(FRAME_DATASET, batch_size=batch_size, shuffle=False, num_workers=8,
-                                                    pin_memory=True, drop_last=False)
-        
-        for i, (points, __) in enumerate(frame_loader):
-            points = points.float().to(self.device)
-            points = points.transpose(2, 1)
-            labels = self.model(points)
+        points, _ = FRAME_DATASET[0]
 
-            points = points.permute(0,2,1).cpu().data.numpy().reshape((-1, 3))
-            labels = labels.permute(0,2,1).cpu().data.numpy().reshape((-1, ))
+        points = torch.from_numpy(points)
+        points = points.unsqueeze(0)
+
+        for i in range(1, len(FRAME_DATASET)):
+            p, _ = FRAME_DATASET[i]
+            p = torch.from_numpy(p)
+            p = p.unsqueeze(0)
+            points = torch.vstack((points, p))
+
+        points = points.float().to(self.device)
+        points = points.transpose(2, 1)
+        labels = self.model(points)
+
+        points = points.permute(0,2,1).cpu().data.numpy().reshape((-1, 3))
+        labels = labels.permute(0,2,1).cpu().data.numpy().reshape((-1, ))
 
         data = np.column_stack((points, labels))
 
