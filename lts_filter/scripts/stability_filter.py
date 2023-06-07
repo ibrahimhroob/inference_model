@@ -96,7 +96,7 @@ class Stability():
 
     def load_model(self, device):
         current_pth = os.path.dirname(os.path.realpath(__file__))
-        parent_pth = os.path.dirname(current_pth)
+        parent_pth = '/home/UoL/drive' #os.path.dirname(current_pth)
         rospy.loginfo('rosnode pth: %s', parent_pth)
         model_path = os.path.join(parent_pth, 'model')
         sys.path.append(model_path)
@@ -120,26 +120,25 @@ class Stability():
     def infer(self, pointcloud):
         start_time = time.time()
         FRAME_DATASET = Loader(pointcloud)
-        batch_size = FRAME_DATASET.num_windows
 
-        frame_loader = torch.utils.data.DataLoader(FRAME_DATASET, batch_size=batch_size, shuffle=False, num_workers=8,
-                                                    pin_memory=True, drop_last=False)
-        
-        for i, (points, __) in enumerate(frame_loader):
-            points = points.float().to(self.device)
-            points = points.transpose(2, 1)
-            labels = self.model(points)
+        points, __ = FRAME_DATASET[0]
+        points = torch.from_numpy(points)
+        points = points.unsqueeze(0)
+        points = points.float().to(self.device)
+        points = points.transpose(2, 1)
 
-            points = points.permute(0,2,1).cpu().data.numpy().reshape((-1, 3))
-            labels = labels.permute(0,2,1).cpu().data.numpy().reshape((-1, ))
+        labels = self.model(points)
 
-            data = np.column_stack((points, labels))
+        points = points.permute(0,2,1).cpu().data.numpy().reshape((-1, 3))
+        labels = labels.permute(0,2,1).cpu().data.numpy().reshape((-1, ))
+
+        data = np.column_stack((points, labels))
 
         data = data[(data[:,3] < self.threshold_dynamic) & (data[:,3] >= self.threshold_ground)]
 
         end_time = time.time()
         elapsed_time = end_time - start_time
-        rospy.loginfo("Frame inference and filter elapsed time: {:.2f} seconds".format(elapsed_time))
+        rospy.loginfo("Frame inference and filter elapsed time: {:.4f} seconds".format(elapsed_time))
 
         return data
 
