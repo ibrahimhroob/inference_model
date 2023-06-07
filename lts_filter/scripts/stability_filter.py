@@ -147,7 +147,7 @@ class Stability():
 
         end_time = time.time()
         elapsed_time = end_time - start_time
-        rospy.loginfo("Frame inference and filter elapsed time: {:.2f} seconds".format(elapsed_time))
+        rospy.loginfo("Frame inference and filter processing time: {:.4f} seconds [{:.2f} Hz]".format(elapsed_time, 1/elapsed_time))
 
         return data
 
