@@ -10,10 +10,14 @@ import numpy as np
 
 import rospy
 import ros_numpy
+from std_msgs.msg import Float32
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
 
 from loader import Loader
+
+# from sklearn.metrics import r2_score
+# from torchmetrics import R2Score
 
 # Additionally, some operations on a GPU are implemented stochastic for efficiency
 # We want to ensure that all operations are deterministic on GPU (if used) for reproducibility
@@ -24,25 +28,32 @@ class Stability():
     def __init__(self):
         rospy.init_node('pointcloud_stability_inference')
 
-        raw_cloud_topic = rospy.get_param('~raw_cloud')
-        filtered_cloud_topic = rospy.get_param('~filtered_cloud')
-        epsilon_0 = rospy.get_param('~epsilon_0')
-        epsilon_1 = rospy.get_param('~epsilon_1')
+        raw_cloud_topic = rospy.get_param('~raw_cloud', "/os_cloud_node/points")
+        filtered_cloud_topic = rospy.get_param('~filtered_cloud', "/cloud_filtered")
+        epsilon_0 = rospy.get_param('~epsilon_0', 0.0)
+        epsilon_1 = rospy.get_param('~epsilon_1', 0.84)
+        self.lidar = rospy.get_param('~lidar', 'hdl-32')
 
         rospy.Subscriber(raw_cloud_topic, PointCloud2, self.callback)
 
         # Initialize the publisher
         self.pub = rospy.Publisher(filtered_cloud_topic, PointCloud2, queue_size=10)
+        self.loss_pub = rospy.Publisher('debug/model_loss', Float32, queue_size=0)
+        self.r2_pub   = rospy.Publisher('debug/model_r2', Float32, queue_size=0)
 
         rospy.loginfo('raw_cloud: %s', raw_cloud_topic)
         rospy.loginfo('filtered_cloud: %s', filtered_cloud_topic)
         rospy.loginfo('Bottom threshold: %f', epsilon_0)
         rospy.loginfo('Upper threshold: %f', epsilon_1)
+        rospy.loginfo('Lidar type: %s', self.lidar)
 
         self.threshold_ground = epsilon_0
         self.threshold_dynamic = epsilon_1
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.model = self.load_model(self.device)
+
+        ''' Define loss and r2score for model evaluation '''
+        self.loss = torch.nn.MSELoss() #.to(self.device)
 
         rospy.spin()
 
@@ -120,34 +131,48 @@ class Stability():
     def infer(self, pointcloud):
         
         start_time = time.time()
-        FRAME_DATASET = Loader(pointcloud)
+        FRAME_DATASET = Loader(pointcloud, self.lidar)
         batch_size = FRAME_DATASET.num_windows
 
-        points, _ = FRAME_DATASET[0]
+        points, labels = FRAME_DATASET[0]
 
         points = torch.from_numpy(points)
         points = points.unsqueeze(0)
 
+        labels = torch.from_numpy(labels)
+        labels = labels.unsqueeze(0)
+
         for i in range(1, len(FRAME_DATASET)):
-            p, _ = FRAME_DATASET[i]
+            p, l = FRAME_DATASET[i]
             p = torch.from_numpy(p)
             p = p.unsqueeze(0)
+            l = torch.from_numpy(l)
+            l = l.unsqueeze(0)
             points = torch.vstack((points, p))
+            labels = torch.vstack((labels, l))
 
         points = points.float().to(self.device)
         points = points.transpose(2, 1)
-        labels = self.model(points)
+        labels_pred = self.model(points)
+
+        ''' Step 5: Calculate loss and r2 '''
+        loss = self.loss(labels_pred.view(-1), labels.view(-1))
+        self.loss_pub.publish(loss)
 
         points = points.permute(0,2,1).cpu().data.numpy().reshape((-1, 3))
-        labels = labels.permute(0,2,1).cpu().data.numpy().reshape((-1, ))
+        labels_pred = labels.permute(0,2,1).cpu().data.numpy().reshape((-1, ))
 
-        data = np.column_stack((points, labels))
+        # r2 = r2_score(y_true, y_pred)
+        # self.r2_pub.publish(r2)
+
+        data = np.column_stack((points, labels_pred))
 
         data = data[(data[:,3] < self.threshold_dynamic) & (data[:,3] >= self.threshold_ground)]
 
         end_time = time.time()
         elapsed_time = end_time - start_time
-        rospy.loginfo("Frame inference and filter processing time: {:.4f} seconds [{:.2f} Hz]".format(elapsed_time, 1/elapsed_time))
+
+        rospy.loginfo("Frame inference and filter processing time: {:.4f} seconds [{:.2f} Hz], L: {:.4f}, R2: {:.4f}".format(elapsed_time, 1/elapsed_time, loss, r2))
 
         return data
 
